@@ -5,8 +5,9 @@
 
 [[users]]
 name = "admin"
+admin = true
 initial_password = "changeme"
 
 [[mount_dirs]]
 name = "Music"
-path = "/music"
+source = "/music"
