@@ -60,7 +60,7 @@ Windows-only; unix builds are headless and unaffected.
 
 | Group | Verdict | Notes |
 |---|---|---|
-| Core service `polaris` (single container) | **base** | Named volumes: `polaris-music` (library, user payload), `polaris-data` (`--data`, embedded native_db index), `polaris-cache` (`--cache`, thumbnails). Config `polaris.toml` delivered image-side (dockerfile_inline COPY per §13) — declare `[[users]]` (pbkdf2-hashed at first boot) and `[[mount_dirs]]` pointing into the music volume. Entrypoint MUST run with `-f` (foreground): the unix binary otherwise daemonizes via the `daemonize` crate (src/main.rs:48-59) and the container exits. No pid file needed with `-f`. |
+| Core service `polaris` (single container) | **base** | Named volumes: `polaris-music` (library, user payload), `polaris-data` (`--data`, embedded native_db index), `polaris-cache` (`--cache`, thumbnails). Config `polaris.toml` delivered image-side (dockerfile_inline COPY per §13) — declare `[[users]]` with `admin = true` (pbkdf2-hashed at first boot; without `admin = true` the user logs in with `is_admin: false` and admin endpoints reject) and `[[mount_dirs]]` pointing into the music volume. Entrypoint MUST run with `-f` (foreground): the unix binary otherwise daemonizes via the `daemonize` crate (src/main.rs:48-59) and the container exits. No pid file needed with `-f`. |
 | Database (mandatory infra) | **REFUSED with reason** | Polaris 0.16.x is embedded-native-only: data layer is `native_db` 0.8.2 / LMDB (`src/app/ndb.rs`), no SQL driver in `Cargo.toml`. Upstream explicitly REMOVED the DB-dir surface in 0.16.0 ("the `-d` command line option and the `POLARIS_DB_DIR` compile-time environment variable have been removed", CHANGELOG) and removed pre-0.15 migrations. It is neither SQLite nor PostgreSQL — no `database/{postgresql,pgrust}` extension; state persists via the `polaris-data` volume. |
 | OIDC (mandatory infra) | **N/A — refused (no native support)** | No OIDC/OAuth/SAML code anywhere in the tree. Auth is TOML-defined users (`[[users]]`, `initial_password` → auto-hashed `hashed_password` pbkdf2-sha256) + branca tokens (src/app/auth.rs). No hook point to front it; no oidc extension. |
 | S3 (mandatory infra) | **N/A — refused (no native support)** | No S3/minio/object-storage references; the library is physical files under `[[mount_dirs]]` paths on the local filesystem. No `s3-storage` extension. (An s3fs-fuse mount of the `polaris-music` volume would be technically possible because that volume holds no database data — offered in the catalog, decided at the extension menu.) |
@@ -102,7 +102,8 @@ Settings shows the `[[mount_dirs]]` music mount → trigger an index
 scan (API `POST /api/trigger_index` or the UI action) → wait for
 index completion (`GET /api/index_status`) → browse albums in the
 collection view → select the seeded track and play it end-to-end in
-the browser player (exercises thumb generation, native_db reads, and
+the browser player or API-equivalents `GET /api/thumbnail/{*path}` +
+`GET /api/audio/{*path}` (exercises thumb generation, native_db reads, and
 Range-based audio streaming).
 
 ## 5. Extension catalog
