@@ -18,7 +18,7 @@ x-healthcheck:
 services:
   polaris:
     container_name: polaris
-    image: "${IMAGE:-localhost/polaris:0.16.1}"
+    image: "${POLARIS_S3FS_IMAGE:-localhost/polaris-s3fs:0.16.1}"
     restart: unless-stopped
     logging:
       driver: json-file
@@ -38,15 +38,8 @@ services:
       start_period: 30s
     build:
       context: "."
-      dockerfile_inline: "FROM ${IMAGE:-localhost/polaris:0.16.1}\nCOPY --chown=polaris:polaris polaris.toml.example /config/polaris.toml\n"
-    command:
-      - "-f"
-      - "--config"
-      - /config/polaris.toml
-      - "--data"
-      - /data
-      - "--cache"
-      - /cache
+      dockerfile_inline: "FROM ${IMAGE:-localhost/polaris:0.16.1}\nRUN apt-get update \\\n && apt-get install -y --no-install-recommends s3fs fuse3 \\\n && rm -rf /var/lib/apt/lists/* \\\n && echo user_allow_other >> /etc/fuse.conf\nCOPY --chown=polaris:polaris polaris.toml.example /config/polaris.toml\nCOPY s3fs-entrypoint.sh /usr/local/bin/s3fs-entrypoint\nRUN chmod 0755 /usr/local/bin/s3fs-entrypoint\n"
+    command: /app/polaris -f --config /config/polaris.toml --data /data --cache /cache
     depends_on:
       polaris-seed:
         condition: service_completed_successfully
@@ -63,12 +56,26 @@ services:
       VIRTUAL_HOST: "${VIRTUAL_HOST}"
       LETSENCRYPT_HOST: "${LETSENCRYPT_HOST}"
       LETSENCRYPT_EMAIL: "${LETSENCRYPT_EMAIL}"
+      S3FS_ENDPOINT: "${S3FS_ENDPOINT:-http://rustfs:9000}"
+      S3FS_BUCKET: "${S3FS_BUCKET:-polaris-music}"
+      S3FS_ARGS: "${S3FS_ARGS:-}"
+      S3FS_EXEC_USER: polaris
+      RUSTFS_ACCESS_KEY: "${RUSTFS_ACCESS_KEY:-}"
+      RUSTFS_SECRET_KEY: "${RUSTFS_SECRET_KEY:-}"
     configs:
       - source: vhost
         target: "${VHOST_PATH:-/vhost.d/${VIRTUAL_HOST}}"
+    user: root
+    entrypoint: /usr/local/bin/s3fs-entrypoint
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - "/dev/fuse:/dev/fuse"
+    security_opt:
+      - "apparmor:unconfined"
   polaris-seed:
     container_name: polaris-seed
-    image: "${IMAGE:-localhost/polaris:0.16.1}"
+    image: "${POLARIS_SEED_S3FS_IMAGE:-localhost/polaris-seed-s3fs:0.16.1}"
     restart: "no"
     logging:
       driver: json-file
@@ -77,15 +84,28 @@ services:
         max-file: "${LOG_MAX_FILE:-3}"
         compress: "${LOG_COMPRESS:-true}"
     user: root
-    entrypoint:
-      - /bin/sh
-      - "-c"
-    command:
-      - cp -rn /seed/. /music/
+    entrypoint: /usr/local/bin/s3fs-entrypoint
+    command: cp -rn /seed/. /music/
     volumes:
       - "polaris-music:/music"
     networks:
       - polaris-network
+      - step-ca-network
+    environment:
+      S3FS_ENDPOINT: "${S3FS_ENDPOINT:-http://rustfs:9000}"
+      S3FS_BUCKET: "${S3FS_BUCKET:-polaris-music}"
+      S3FS_ARGS: "${S3FS_ARGS:-}"
+      RUSTFS_ACCESS_KEY: "${RUSTFS_ACCESS_KEY:-}"
+      RUSTFS_SECRET_KEY: "${RUSTFS_SECRET_KEY:-}"
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - "/dev/fuse:/dev/fuse"
+    security_opt:
+      - "apparmor:unconfined"
+    build:
+      context: "."
+      dockerfile_inline: "FROM ${IMAGE:-localhost/polaris:0.16.1}\nRUN apt-get update \\\n && apt-get install -y --no-install-recommends s3fs fuse3 \\\n && rm -rf /var/lib/apt/lists/* \\\n && echo user_allow_other >> /etc/fuse.conf\nCOPY s3fs-entrypoint.sh /usr/local/bin/s3fs-entrypoint\nRUN chmod 0755 /usr/local/bin/s3fs-entrypoint\n"
 volumes:
   polaris-music:
     name: polaris-music

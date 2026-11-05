@@ -1,0 +1,89 @@
+# s3fs-fuse extension: serves the music library from the RustFS bucket
+# (polaris-music) instead of a local volume. Polaris has no native S3
+# support, so both services get an s3fs-enabled image built inline from
+# ${IMAGE} and an entrypoint wrapper that mounts the bucket at /music
+# before exec'ing the original command.
+#
+# NOTE: this extension is wired into the step-ca environment only — the
+# step-ca overlay already attaches `polaris` to the external
+# step-ca-network where RustFS lives; this fragment attaches
+# `polaris-seed` (which the overlay does not touch) and declares the
+# network so the merged file stays valid.
+#
+# NOTE: stackbuilder merges volume lists append-only, so the base
+# `polaris-music:/music` mount cannot be removed here; the entrypoint
+# wrapper umounts it at start so the bucket is the only music source.
+services:
+  polaris:
+    # Distinct tag so a rebuild never clobbers the source-built
+    # localhost/polaris:0.16.1 image used by the base deployment.
+    image: ${POLARIS_S3FS_IMAGE:-localhost/polaris-s3fs:0.16.1}
+    # Root is needed to mount s3fs; the wrapper drops back to the polaris
+    # user (S3FS_EXEC_USER) before exec'ing the server.
+    user: root
+    # String form (not a list) so the merge REPLACES the base command and
+    # the image ENTRYPOINT instead of appending to them.
+    entrypoint: /usr/local/bin/s3fs-entrypoint
+    # -f is MANDATORY: without it the binary daemonizes and PID 1 exits (H2)
+    command: /app/polaris -f --config /config/polaris.toml --data /data --cache /cache
+    environment:
+      S3FS_ENDPOINT: ${S3FS_ENDPOINT:-http://rustfs:9000}
+      S3FS_BUCKET: ${S3FS_BUCKET:-polaris-music}
+      S3FS_ARGS: ${S3FS_ARGS:-}
+      S3FS_EXEC_USER: polaris
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-}
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse:/dev/fuse
+    security_opt:
+      - apparmor:unconfined
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM ${IMAGE:-localhost/polaris:0.16.1}
+        RUN apt-get update \
+         && apt-get install -y --no-install-recommends s3fs fuse3 \
+         && rm -rf /var/lib/apt/lists/* \
+         && echo user_allow_other >> /etc/fuse.conf
+        COPY --chown=polaris:polaris polaris.toml.example /config/polaris.toml
+        COPY s3fs-entrypoint.sh /usr/local/bin/s3fs-entrypoint
+        RUN chmod 0755 /usr/local/bin/s3fs-entrypoint
+
+  polaris-seed:
+    # Same s3fs-enabled image shape so `cp -rn /seed/. /music/` writes
+    # into the bucket (idempotent, -n = no-clobber) instead of the local
+    # volume; depends_on: service_completed_successfully semantics from
+    # the base are preserved.
+    image: ${POLARIS_SEED_S3FS_IMAGE:-localhost/polaris-seed-s3fs:0.16.1}
+    entrypoint: /usr/local/bin/s3fs-entrypoint
+    command: cp -rn /seed/. /music/
+    environment:
+      S3FS_ENDPOINT: ${S3FS_ENDPOINT:-http://rustfs:9000}
+      S3FS_BUCKET: ${S3FS_BUCKET:-polaris-music}
+      S3FS_ARGS: ${S3FS_ARGS:-}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-}
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse:/dev/fuse
+    security_opt:
+      - apparmor:unconfined
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM ${IMAGE:-localhost/polaris:0.16.1}
+        RUN apt-get update \
+         && apt-get install -y --no-install-recommends s3fs fuse3 \
+         && rm -rf /var/lib/apt/lists/* \
+         && echo user_allow_other >> /etc/fuse.conf
+        COPY s3fs-entrypoint.sh /usr/local/bin/s3fs-entrypoint
+        RUN chmod 0755 /usr/local/bin/s3fs-entrypoint
+    networks:
+      - step-ca-network
+
+networks:
+  step-ca-network:
+    external: true
