@@ -1,0 +1,12 @@
+# Polaris configuration — baked to /config/polaris.toml by the base compose
+# dockerfile_inline layer. `initial_password` is pbkdf2-hashed by polaris at
+# first boot (the file is rewritten in place; it is baked polaris-owned so
+# that write succeeds). Change credentials via the web UI afterwards.
+
+[[users]]
+name = "admin"
+initial_password = "changeme"
+
+[[mount_dirs]]
+name = "Music"
+path = "/music"

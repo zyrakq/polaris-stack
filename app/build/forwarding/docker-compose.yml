@@ -1,0 +1,90 @@
+---
+x-logging:
+  driver: json-file
+  options:
+    max-size: "${LOG_MAX_SIZE:-10m}"
+    max-file: "${LOG_MAX_FILE:-3}"
+    compress: "${LOG_COMPRESS:-true}"
+x-healthcheck:
+  test:
+    - CMD
+    - curl
+    - "-f"
+    - "http://127.0.0.1:5050/"
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 30s
+services:
+  polaris:
+    container_name: polaris
+    image: "${IMAGE:-localhost/polaris:0.16.1}"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "${LOG_MAX_SIZE:-10m}"
+        max-file: "${LOG_MAX_FILE:-3}"
+        compress: "${LOG_COMPRESS:-true}"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "-f"
+        - "http://127.0.0.1:5050/"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    build:
+      context: "."
+      dockerfile_inline: "FROM ${IMAGE:-localhost/polaris:0.16.1}\nCOPY --chown=polaris:polaris polaris.toml.example /config/polaris.toml\n"
+    command:
+      - "-f"
+      - "--config"
+      - /config/polaris.toml
+      - "--data"
+      - /data
+      - "--cache"
+      - /cache
+    depends_on:
+      polaris-seed:
+        condition: service_completed_successfully
+    volumes:
+      - "polaris-music:/music"
+      - "polaris-data:/data"
+      - "polaris-cache:/cache"
+    networks:
+      - polaris-network
+    ports:
+      - "${POLARIS_PORT:-5050}:5050"
+  polaris-seed:
+    container_name: polaris-seed
+    image: "${IMAGE:-localhost/polaris:0.16.1}"
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "${LOG_MAX_SIZE:-10m}"
+        max-file: "${LOG_MAX_FILE:-3}"
+        compress: "${LOG_COMPRESS:-true}"
+    user: root
+    entrypoint:
+      - /bin/sh
+      - "-c"
+    command:
+      - cp -rn /seed/. /music/
+    volumes:
+      - "polaris-music:/music"
+    networks:
+      - polaris-network
+volumes:
+  polaris-music:
+    name: polaris-music
+  polaris-data:
+    name: polaris-data
+  polaris-cache:
+    name: polaris-cache
+networks:
+  polaris-network:
+    name: polaris-network
