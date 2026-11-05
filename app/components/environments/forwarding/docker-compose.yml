@@ -1,0 +1,4 @@
+services:
+  polaris:
+    ports:
+      - "${POLARIS_PORT:-5050}:5050"
