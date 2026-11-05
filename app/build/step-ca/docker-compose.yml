@@ -38,7 +38,7 @@ services:
       start_period: 30s
     build:
       context: "."
-      dockerfile_inline: "FROM ${IMAGE:-localhost/polaris:0.16.1}\nRUN apt-get update \\\n && apt-get install -y --no-install-recommends s3fs fuse3 \\\n && rm -rf /var/lib/apt/lists/* \\\n && echo user_allow_other >> /etc/fuse.conf\nCOPY --chown=polaris:polaris polaris.toml.example /config/polaris.toml\nCOPY s3fs-entrypoint.sh /usr/local/bin/s3fs-entrypoint\nRUN chmod 0755 /usr/local/bin/s3fs-entrypoint\n"
+      dockerfile_inline: "FROM ${IMAGE:-localhost/polaris:0.16.1}\nUSER root\nRUN apt-get update \\\n && apt-get install -y --no-install-recommends s3fs fuse3 \\\n && rm -rf /var/lib/apt/lists/* \\\n && echo user_allow_other >> /etc/fuse.conf\nCOPY --chown=polaris:polaris polaris.toml.example /config/polaris.toml\nCOPY s3fs-entrypoint.sh /usr/local/bin/s3fs-entrypoint\nRUN chmod 0755 /usr/local/bin/s3fs-entrypoint\n"
     command: /app/polaris -f --config /config/polaris.toml --data /data --cache /cache
     depends_on:
       polaris-seed:
@@ -105,7 +105,7 @@ services:
       - "apparmor:unconfined"
     build:
       context: "."
-      dockerfile_inline: "FROM ${IMAGE:-localhost/polaris:0.16.1}\nRUN apt-get update \\\n && apt-get install -y --no-install-recommends s3fs fuse3 \\\n && rm -rf /var/lib/apt/lists/* \\\n && echo user_allow_other >> /etc/fuse.conf\nCOPY s3fs-entrypoint.sh /usr/local/bin/s3fs-entrypoint\nRUN chmod 0755 /usr/local/bin/s3fs-entrypoint\n"
+      dockerfile_inline: "FROM ${IMAGE:-localhost/polaris:0.16.1}\nUSER root\nRUN apt-get update \\\n && apt-get install -y --no-install-recommends s3fs fuse3 \\\n && rm -rf /var/lib/apt/lists/* \\\n && echo user_allow_other >> /etc/fuse.conf\nCOPY s3fs-entrypoint.sh /usr/local/bin/s3fs-entrypoint\nRUN chmod 0755 /usr/local/bin/s3fs-entrypoint\n"
 volumes:
   polaris-music:
     name: polaris-music
