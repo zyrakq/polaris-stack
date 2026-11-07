@@ -28,7 +28,6 @@ services:
       dockerfile_inline: |
         FROM ${IMAGE:-localhost/polaris:0.16.1}
         COPY --chown=polaris:polaris polaris.toml.example /config/polaris.toml
-    # -f is MANDATORY: without it the unix binary daemonizes and PID 1 exits (H2)
     command:
       - "-f"
       - "--config"
@@ -54,9 +53,6 @@ services:
     logging: *default-logging
     user: root
     entrypoint: ["/bin/sh", "-c"]
-    # -n = no-clobber: reseeds after `down -v` without ever overwriting
-    # user-added music; seed files stay root-owned world-readable (polaris
-    # only needs read access to scan/play them)
     command: ["cp -rn /seed/. /music/"]
     volumes:
       - polaris-music:/music

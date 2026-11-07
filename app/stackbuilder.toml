@@ -3,15 +3,12 @@ environments_path = "./environments"
 extensions_dirs = ["extensions"]
 
 [build]
-yaml_merger = "rust"
 skip_base_generation = true
 copy_additional_files = true
 
 [build.environments]
 available = ["forwarding", "letsencrypt", "step-ca"]
 
-# Base-only environments: keep generating their build dirs (global
-# skip_base_generation = true would otherwise drop them).
 [build.environments.forwarding]
 skip_base_generation = false
 
